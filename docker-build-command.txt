@@ -1,0 +1,1 @@
+sudo docker build . --no-cache --pull -t ibrummel/manual-auth-hook-swag:v0.1.2 -t ibrummel/manual-auth-hook-swag:latest
