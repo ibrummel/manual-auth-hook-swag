@@ -1,0 +1,8 @@
+#!/usr/bin/with-contenv bash
+
+echo -e "Starting the ACME DNS server locally"
+
+exec /bin/acme-dns &
+
+echo -e "Sleeping 10s to make sure acme is running before certbot attempts renewal"
+sleep 10

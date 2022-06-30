@@ -1,3 +1,13 @@
+# IB: Build the acme-dns server binary in its own layer. Adapted from https://github.com/joohoi/acme-dns/blob/master/Do>FROM golang:alpine AS builder
+FROM golang:alpine AS builder
+RUN apk add --update gcc musl-dev git
+
+ENV GOPATH /tmp/buildcache
+RUN git clone https://github.com/joohoi/acme-dns /tmp/acme-dns
+WORKDIR /tmp/acme-dns
+RUN CGO_ENABLED=1 go build
+
+# Begin original file
 FROM ghcr.io/linuxserver/baseimage-alpine-nginx:3.14
 
 # set version label
@@ -10,6 +20,7 @@ LABEL maintainer="aptalca"
 # environment settings
 ENV DHLEVEL=2048 ONLY_SUBDOMAINS=false AWS_CONFIG_FILE=/config/dns-conf/route53.ini
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
+ENV PYTHONUNBUFFERED=1
 
 RUN \
   echo "**** install build packages ****" && \
@@ -89,7 +100,11 @@ RUN \
     py3-cryptography \
     py3-future \
     py3-pip \
-    whois && \
+    whois \
+  # Install python so that the manual auth hook script can run
+    python3 && \
+  ln -sf python3 /usr/bin/python && \
+  # Symlink pythin into the path
   echo "**** install certbot plugins ****" && \
   if [ -z ${CERTBOT_VERSION+x} ]; then \
     CERTBOT="certbot"; \
@@ -167,6 +182,17 @@ RUN \
     /tmp/* \
     /root/.cache \
     /root/.cargo
-
+# Copy in acme-dns binary, make necessary directories, and install necessary certs
+COPY --from=builder /tmp/acme-dns /bin/
+RUN mkdir -p /etc/acme-dns
+RUN mkdir -p /var/lib/acme-dns
+RUN rm -rf ./config.cfg
+RUN apk --no-cache add ca-certificates && update-ca-certificates
+# Back to linuxserver code  
 # add local files
 COPY root/ /
+
+# Expose the necessary ports and volumes for acme-dns
+VOLUME ["/etc/acme-dns", "/var/lib/acme-dns"]
+EXPOSE 53 80 443
+EXPOSE 53/udp
